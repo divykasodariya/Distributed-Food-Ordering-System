@@ -49,9 +49,11 @@ distributed-food-ordering/
 │                   │   ├── OrderStore.java
 │                   │   └── ReplicationManager.java
 │                   ├── monitoring/
-│                   │   └── HeartbeatMonitor.java
+│                   │   ├── HeartbeatMonitor.java
+│                   │   └── HeartbeatManager.java
 │                   ├── election/
-│                   │   └── BullyElectionManager.java
+│                   │   ├── BullyElectionManager.java
+│                   │   └── BullyElection.java
 │                   ├── config/
 │                   │   └── ClusterConfig.java
 │                   ├── util/
