@@ -302,14 +302,7 @@ public class OrderNodeServer extends UnicastRemoteObject implements OrderNodeRem
                     System.currentTimeMillis()
             );
 
-            // Persist locally and replicate to backups
-            try {
-                eventLog.append(assignEvent);
-                System.out.printf("[N%s] event persisted to %s\n", nodeInfo.getNodeId(), eventLog.getLogFile().getName());
-            } catch (IOException e) {
-                System.err.println("Persist error: " + e.getMessage());
-            }
-            replicationManager.replicateToBackups(assignEvent, peers);
+            persistAndReplicate(assignEvent);
 
             System.out.printf("\n[ASSIGNMENT]\nOrder=#%d\nSource=OrderNode-%s\nLamport=%d\nResult: %s\n",
                     orderId, nodeInfo.getNodeId(), assignLamport, result);
@@ -348,10 +341,7 @@ public class OrderNodeServer extends UnicastRemoteObject implements OrderNodeRem
                     System.currentTimeMillis()
             );
 
-            try {
-                eventLog.append(arriveEvent);
-            } catch (IOException ignored) {}
-            replicationManager.replicateToBackups(arriveEvent, peers);
+            persistAndReplicate(arriveEvent);
 
             System.out.printf("\n[RIDER ARRIVED]\nOrder=#%d\nSource=%s\nLamport=%d\n",
                     orderId, riderId, arriveLamport);
@@ -390,10 +380,7 @@ public class OrderNodeServer extends UnicastRemoteObject implements OrderNodeRem
                     System.currentTimeMillis()
             );
 
-            try {
-                eventLog.append(deliverEvent);
-            } catch (IOException ignored) {}
-            replicationManager.replicateToBackups(deliverEvent, peers);
+            persistAndReplicate(deliverEvent);
 
             System.out.printf("\n[DELIVERED]\nOrder=#%d\nSource=OrderNode-%s\nLamport=%d\n",
                     orderId, nodeInfo.getNodeId(), deliverLamport);
@@ -406,24 +393,34 @@ public class OrderNodeServer extends UnicastRemoteObject implements OrderNodeRem
         // Advance local Lamport clock upon receiving replicated message
         lamportClock.updateOnReceive(event.getLamportTimestamp());
 
+        System.out.printf("[N%s] received replication event %s (Order=#%d, Type=%s, Ver=%d)\n",
+                nodeInfo.getNodeId(), event.getEventId(), event.getOrderId(), event.getEventType(), event.getVersion());
+
         // Idempotent state application
         boolean applied = orderStore.apply(event);
         if (applied) {
+            System.out.printf("[N%s] applied event %s to OrderStore\n",
+                    nodeInfo.getNodeId(), event.getEventId());
             try {
                 eventLog.append(event);
+                System.out.printf("[N%s] persisted %s to data/node%s/events.log\n",
+                        nodeInfo.getNodeId(), event.getEventId(), nodeInfo.getNodeId());
                 if (event.getVersion() > versionSequence.get()) {
                     versionSequence.set(event.getVersion());
                 }
             } catch (IOException e) {
+                System.err.printf("[N%s ERROR] Disk write failure for %s: %s\n",
+                        nodeInfo.getNodeId(), event.getEventId(), e.getMessage());
                 return new ReplicationAck(nodeInfo.getNodeId(), event.getEventId(), false,
                         "Disk write failure: " + e.getMessage(), eventLog.getLatestVersion());
             }
-            System.out.printf("[N%s] event applied (Order=#%d, Type=%s, Ver=%d)\n",
-                    nodeInfo.getNodeId(), event.getOrderId(), event.getEventType(), event.getVersion());
         } else {
             System.out.printf("[N%s] duplicate event ignored (Event=%s, Ver=%d)\n",
                     nodeInfo.getNodeId(), event.getEventId(), event.getVersion());
         }
+
+        System.out.printf("[N%s] ACK sent to Node %s for %s\n",
+                nodeInfo.getNodeId(), event.getSourceNodeId(), event.getEventId());
 
         return new ReplicationAck(nodeInfo.getNodeId(), event.getEventId(), true,
                 applied ? "Applied" : "Duplicate ignored", eventLog.getLatestVersion());

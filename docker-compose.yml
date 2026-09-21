@@ -16,18 +16,24 @@ services:
     container_name: order-node-1
     command: java -cp bin com.foodordering.node.OrderNode1
     network_mode: host
+    volumes:
+      - ./data/node1:/app/data/node1
 
   node2:
     build: .
     container_name: order-node-2
     command: java -cp bin com.foodordering.node.OrderNode2
     network_mode: host
+    volumes:
+      - ./data/node2:/app/data/node2
 
   node3:
     build: .
     container_name: order-node-3
     command: java -cp bin com.foodordering.node.OrderNode3
     network_mode: host
+    volumes:
+      - ./data/node3:/app/data/node3
 
   customer:
     build: .
