@@ -76,6 +76,7 @@ distributed-food-ordering/
 │   └── legacy/
 │
 ├── docs/
+│   ├── TESTING_GUIDE.md
 │   └── architecture/
 │       └── ARCHITECTURE.md
 │

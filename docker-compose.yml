@@ -1,30 +1,44 @@
 version: '3.8'
 
 services:
-  order-node-1:
-    build: .
-    container_name: order-node-1
-    command: java -cp bin com.foodordering.node.OrderNode1
-    network_mode: host
-
-  order-node-2:
-    build: .
-    container_name: order-node-2
-    command: java -cp bin com.foodordering.node.OrderNode2
-    network_mode: host
-
-  order-node-3:
-    build: .
-    container_name: order-node-3
-    command: java -cp bin com.foodordering.node.OrderNode3
-    network_mode: host
-
-  gateway-server:
+  gateway:
     build: .
     container_name: gateway-server
     command: java -cp bin com.foodordering.gateway.GatewayServer
     network_mode: host
     depends_on:
-      - order-node-1
-      - order-node-2
-      - order-node-3
+      - node1
+      - node2
+      - node3
+
+  node1:
+    build: .
+    container_name: order-node-1
+    command: java -cp bin com.foodordering.node.OrderNode1
+    network_mode: host
+
+  node2:
+    build: .
+    container_name: order-node-2
+    command: java -cp bin com.foodordering.node.OrderNode2
+    network_mode: host
+
+  node3:
+    build: .
+    container_name: order-node-3
+    command: java -cp bin com.foodordering.node.OrderNode3
+    network_mode: host
+
+  customer:
+    build: .
+    container_name: customer-client
+    command: java -cp bin com.foodordering.client.customer.CustomerClient
+    network_mode: host
+    profiles: ["client"]
+
+  rider:
+    build: .
+    container_name: rider-client
+    command: java -cp bin com.foodordering.client.rider.RiderClient R1
+    network_mode: host
+    profiles: ["client"]
