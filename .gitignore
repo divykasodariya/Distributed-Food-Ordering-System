@@ -1,0 +1,8 @@
+bin/
+build/
+target/
+*.class
+*.log
+.idea/
+.DS_Store
+DuplicateInjector.java

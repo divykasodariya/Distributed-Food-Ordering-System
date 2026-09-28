@@ -14,7 +14,7 @@ services:
   node1:
     build: .
     container_name: order-node-1
-    command: java -cp bin com.foodordering.node.OrderNode1
+    command: java -cp bin com.foodordering.node.OrderNodeServer 1 PRIMARY 1101
     network_mode: host
     volumes:
       - ./data/node1:/app/data/node1
@@ -22,7 +22,7 @@ services:
   node2:
     build: .
     container_name: order-node-2
-    command: java -cp bin com.foodordering.node.OrderNode2
+    command: java -cp bin com.foodordering.node.OrderNodeServer 2 BACKUP 1102
     network_mode: host
     volumes:
       - ./data/node2:/app/data/node2
@@ -30,7 +30,7 @@ services:
   node3:
     build: .
     container_name: order-node-3
-    command: java -cp bin com.foodordering.node.OrderNode3
+    command: java -cp bin com.foodordering.node.OrderNodeServer 3 BACKUP 1103
     network_mode: host
     volumes:
       - ./data/node3:/app/data/node3
