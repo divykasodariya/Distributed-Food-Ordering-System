@@ -76,9 +76,6 @@ public class EventLog {
         }
     }
 
-    /**
-     * Replays all historical events from the log file in chronological order.
-     */
     public synchronized List<ReplicationEvent> replayAll() {
         List<ReplicationEvent> events = new ArrayList<>();
         if (!logFile.exists()) {
@@ -88,13 +85,17 @@ public class EventLog {
         try (BufferedReader reader = new BufferedReader(new FileReader(logFile, StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                ReplicationEvent ev = ReplicationEvent.fromLogString(line);
-                if (ev != null) {
-                    events.add(ev);
-                    loggedEventIds.add(ev.getEventId());
-                    if (ev.getVersion() > latestVersion) {
-                        latestVersion = ev.getVersion();
+                try {
+                    ReplicationEvent ev = ReplicationEvent.fromLogString(line);
+                    if (ev != null) {
+                        events.add(ev);
+                        loggedEventIds.add(ev.getEventId());
+                        if (ev.getVersion() > latestVersion) {
+                            latestVersion = ev.getVersion();
+                        }
                     }
+                } catch (Exception e) {
+                    System.err.printf("[EVENT LOG WARNING] Skipping corrupted log entry in %s: %s\n", logFile.getPath(), e.getMessage());
                 }
             }
         } catch (IOException e) {
