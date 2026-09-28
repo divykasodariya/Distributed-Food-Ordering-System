@@ -1,4 +1,4 @@
-# Distributed Food Ordering System
+# Distributed Food Ordering System for DC
 
 A modular, multi-process distributed systems project implemented in native Java and Java RMI. 
 
