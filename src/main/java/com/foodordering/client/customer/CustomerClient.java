@@ -9,11 +9,6 @@ import com.foodordering.model.OrderSnapshot;
 import java.rmi.Naming;
 import java.util.Scanner;
 
-/**
- * Customer client process.
- * Connects to the GatewayServer via Java RMI to place orders and query order statuses.
- * Maintains its own Lamport logical clock for causal event ordering.
- */
 public class CustomerClient {
 
     public static void main(String[] args) {
@@ -64,7 +59,8 @@ public class CustomerClient {
                 System.out.println("7. Exit");
                 System.out.print("Enter choice: ");
 
-                if (!scanner.hasNextInt()) break;
+                if (!scanner.hasNextInt())
+                    break;
                 int choice = scanner.nextInt();
                 scanner.nextLine(); // consume newline
 
