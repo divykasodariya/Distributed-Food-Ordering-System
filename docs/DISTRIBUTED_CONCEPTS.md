@@ -55,3 +55,12 @@ Used to synchronize time between the Server (Gateway) and Delivery Riders.
 - `ExecutorService`: Background order preparation tasks run on a bounded thread pool.
 - `ConcurrentHashMap`: Used by the `OrderStore` for non-blocking concurrent map lookups.
 - `synchronized`: Used for mutating operations on individual orders to prevent race conditions during concurrent rider bids.
+
+## 9. Load Balancing & Read Offloading (Smooth Weighted Round-Robin)
+To prevent the Primary node from becoming a CPU/IO bottleneck:
+- **Write Offloading**: All state-modifying write operations (`placeOrder`, `acceptDelivery`, `deliverOrder`) are routed strictly to the **PRIMARY** node to guarantee event ordering and log replication.
+- **Read Offloading (Smooth WRR)**: Read-only queries (`getOrderStatus`) are load-balanced across all healthy nodes (Primary and Backups) using Nginx's **Smooth Weighted Round-Robin** algorithm.
+  - **PRIMARY Node Weight**: Assigned a lower weight (`1`) so its resources remain dedicated to writes and disk synchronization.
+  - **BACKUP Nodes Weight**: Assigned higher weights (`3`) to maximize utilization of otherwise idle backup nodes.
+- **Dynamic Topology Adaptation**: When a leader election occurs or a node fails, the Gateway automatically clears and recalculates the WRR state without interrupting client requests.
+
