@@ -42,6 +42,7 @@ distributed-food-ordering/
 - **Heartbeat Failure Detection**: Scheduled periodic health probes.
 - **Distributed Bully Leader Election**: Dynamic primary promotion upon failure.
 - **Dynamic Failover**: Gateway updates routing upon leader announcement.
+- **Smooth Weighted Round-Robin Load Balancing**: Gateway offloads read queries across available nodes (Primary weight: 1, Backup weight: 3) to optimize CPU/disk utilization.
 - **Node Recovery**: Stale or restarted nodes replay logs and catch-up from primary.
 - **Concurrency**: Thread-safe operations using `ConcurrentHashMap` and thread pools.
 

@@ -41,6 +41,8 @@ public class GatewayServer extends UnicastRemoteObject implements GatewayRemote 
         nodes.add(new NodeInfo(ClusterConfig.NODE_3_ID, host, ClusterConfig.NODE_3_PORT, NodeRole.BACKUP, "ALIVE"));
     }
 
+    private final Map<String, Integer> currentWeights = Collections.synchronizedMap(new java.util.HashMap<>());
+
     public synchronized NodeInfo getPrimaryNodeInfo() throws RemoteException {
         for (NodeInfo info : nodes) {
             if (info.getRole() == NodeRole.PRIMARY) {
@@ -48,6 +50,60 @@ public class GatewayServer extends UnicastRemoteObject implements GatewayRemote 
             }
         }
         throw new RemoteException("[GATEWAY ERROR] No PRIMARY Order Node is currently designated in the cluster topology.");
+    }
+
+    /**
+     * Selects an available node for READ operations using Smooth Weighted Round-Robin load balancing.
+     * PRIMARY node receives weight = 1 (reserving CPU/disk capacity for writes and replication).
+     * BACKUP nodes receive weight = 3 (utilizing idle backup capacity for read offloading).
+     */
+    private OrderNodeRemote getNextReadStub() throws RemoteException {
+        synchronized (this) {
+            List<NodeInfo> availableNodes = new ArrayList<>();
+            for (NodeInfo info : nodes) {
+                if (!"UNREACHABLE".equalsIgnoreCase(info.getHealthStatus())) {
+                    availableNodes.add(info);
+                }
+            }
+
+            if (availableNodes.isEmpty()) {
+                return getPrimaryStub();
+            }
+
+            int totalWeight = 0;
+            NodeInfo selectedNode = null;
+            int maxCurrentWeight = Integer.MIN_VALUE;
+
+            for (NodeInfo info : availableNodes) {
+                int baseWeight = (info.getRole() == NodeRole.PRIMARY) ? 1 : 3;
+                int currentWeight = currentWeights.getOrDefault(info.getNodeId(), 0) + baseWeight;
+                currentWeights.put(info.getNodeId(), currentWeight);
+                totalWeight += baseWeight;
+
+                if (currentWeight > maxCurrentWeight) {
+                    maxCurrentWeight = currentWeight;
+                    selectedNode = info;
+                }
+            }
+
+            if (selectedNode != null) {
+                currentWeights.put(selectedNode.getNodeId(), maxCurrentWeight - totalWeight);
+
+                try {
+                    OrderNodeRemote stub = (OrderNodeRemote) Naming.lookup(selectedNode.getRmiUrl());
+                    System.out.printf("[GATEWAY LOAD BALANCER] Routing read request getOrderStatus() -> Node %s (%s, WRR weight: %d)\n",
+                            selectedNode.getNodeId(), selectedNode.getRole(),
+                            (selectedNode.getRole() == NodeRole.PRIMARY) ? 1 : 3);
+                    return stub;
+                } catch (Exception e) {
+                    System.out.printf("[GATEWAY LOAD BALANCER] Node %s is UNREACHABLE during read lookup. Failing over to Primary...\n",
+                            selectedNode.getNodeId());
+                    selectedNode.setHealthStatus("UNREACHABLE");
+                }
+            }
+
+            return getPrimaryStub();
+        }
     }
 
     private OrderNodeRemote getPrimaryStub() throws RemoteException {
@@ -84,6 +140,7 @@ public class GatewayServer extends UnicastRemoteObject implements GatewayRemote 
         System.out.printf("\n==================================================\n" +
                         "  [GATEWAY ROUTING UPDATE] Primary Node updated -> Node %s\n" +
                         "==================================================\n", newLeaderNodeId);
+        currentWeights.clear();
         for (NodeInfo info : nodes) {
             if (info.getNodeId().equals(newLeaderNodeId)) {
                 info.setRole(NodeRole.PRIMARY);
@@ -133,8 +190,7 @@ public class GatewayServer extends UnicastRemoteObject implements GatewayRemote 
 
     @Override
     public OrderSnapshot getOrderStatus(int orderId) throws RemoteException {
-        NodeInfo primary = getPrimaryNodeInfo();
-        OrderNodeRemote stub = getPrimaryStub();
+        OrderNodeRemote stub = getNextReadStub();
         return stub.getOrderStatus(orderId);
     }
 

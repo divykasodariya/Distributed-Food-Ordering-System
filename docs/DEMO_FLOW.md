@@ -37,7 +37,22 @@ docker compose run --rm rider java -cp bin com.foodordering.client.rider.RiderCl
 Check the event history in the Customer or Rider client to observe Lamport Logical Clock behavior.
 Every event (`ORDER_CREATED`, `RIDER_ACCEPTED`, `ASSIGNED`) strictly advances the Lamport clock counter, establishing causal order.
 
-## 5. Failover & Bully Election
+## 5. Smooth Weighted Round-Robin Load Balancing
+Demonstrate read-offloading and Smooth WRR load balancing across nodes:
+1. Make multiple status queries for an order using the Customer Client:
+   - Select option **Check Order Status** repeatedly in the client.
+2. Inspect the Gateway Server logs:
+   ```bash
+   docker compose logs -f gateway
+   ```
+3. Observe how read queries are interleaved across available nodes according to their WRR weights (Backup nodes Node 2 and Node 3 receiving 3x the read traffic compared to Primary Node 1):
+   ```text
+   [GATEWAY LOAD BALANCER] Routing read request getOrderStatus() -> Node 2 (BACKUP, WRR weight: 3)
+   [GATEWAY LOAD BALANCER] Routing read request getOrderStatus() -> Node 3 (BACKUP, WRR weight: 3)
+   [GATEWAY LOAD BALANCER] Routing read request getOrderStatus() -> Node 1 (PRIMARY, WRR weight: 1)
+   ```
+
+## 6. Failover & Bully Election
 Kill the Primary node (Node 1) to demonstrate fault tolerance:
 ```bash
 docker compose stop node1
@@ -50,12 +65,12 @@ docker compose logs -f node2 node3
 - **Bully Election**: Node 2 challenges Node 3. Node 3 (highest ID) wins and announces itself as the new PRIMARY.
 - **Gateway Update**: The Gateway automatically redirects traffic to Node 3.
 
-## 6. Post-Failover Validation
+## 7. Post-Failover Validation
 Place another order using the Customer client. The order will be successfully handled by the new Primary (Node 3) and assigned an ID starting with `3` (e.g., `#3001`).
 
 Retrieve the status of the first order (`#1001`). It is seamlessly available from Node 3, proving that replication was successful before the crash.
 
-## 7. Node Recovery
+## 8. Node Recovery
 Restart the failed Node 1:
 ```bash
 docker compose start node1
