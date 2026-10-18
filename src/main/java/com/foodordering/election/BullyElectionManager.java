@@ -132,14 +132,21 @@ public class BullyElectionManager {
             }
         }
 
-        // 2. Register new PRIMARY with GatewayServer
-        try {
-            System.out.printf("[BULLY ELECTION] [N%s -> GATEWAY] Notifying Gateway of new PRIMARY...\n", localNodeId);
-            GatewayRemote gateway = (GatewayRemote) Naming.lookup(ClusterConfig.getGatewayUrl());
-            gateway.notifyLeaderChanged(localNodeId);
-            System.out.println("[BULLY ELECTION] Gateway routing updated successfully.");
-        } catch (Exception e) {
-            System.err.printf("[BULLY ELECTION ERROR] Failed to notify GatewayServer: %s\n", e.getMessage());
+        // 2. Register new PRIMARY with GatewayServer (with retries for network resilience)
+        boolean gatewayNotified = false;
+        for (int attempt = 1; attempt <= 3 && !gatewayNotified; attempt++) {
+            try {
+                System.out.printf("[BULLY ELECTION] [N%s -> GATEWAY] Notifying Gateway of new PRIMARY (attempt %d/3)...\n", localNodeId, attempt);
+                GatewayRemote gateway = (GatewayRemote) Naming.lookup(ClusterConfig.getGatewayUrl());
+                gateway.notifyLeaderChanged(localNodeId);
+                System.out.println("[BULLY ELECTION] Gateway routing updated successfully.");
+                gatewayNotified = true;
+            } catch (Exception e) {
+                System.err.printf("[BULLY ELECTION WARN] Gateway notification attempt %d failed: %s\n", attempt, e.getMessage());
+                try {
+                    Thread.sleep(150);
+                } catch (InterruptedException ignored) {}
+            }
         }
 
         electionInProgress.set(false);
