@@ -113,6 +113,16 @@ public class Order implements Serializable {
     }
 
     /**
+     * Direct assignment applied during state machine replication and log replay.
+     */
+    public synchronized void setAssignedRiderDirectly(String riderId, long timestamp) {
+        this.assignedRider = riderId;
+        this.assignmentTime = timestamp > 0 ? timestamp : System.currentTimeMillis();
+        this.deadline = this.assignmentTime + (10 * 60 * 1000);
+        this.status = STATUS_ASSIGNED;
+    }
+
+    /**
      * Thread-safe check when rider arrives at restaurant.
      * Validates against the 10-minute deadline.
      */

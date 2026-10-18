@@ -106,7 +106,12 @@ public class OrderStore {
             case ASSIGNED -> {
                 Order order = orders.get(orderId);
                 if (order != null) {
-                    order.finalizeAssignment();
+                    String assignedRider = event.getRiderId();
+                    if (assignedRider != null && !assignedRider.isEmpty()) {
+                        order.setAssignedRiderDirectly(assignedRider, event.getTimestamp());
+                    } else {
+                        order.finalizeAssignment();
+                    }
                     DistributedEvent de = new DistributedEvent(
                             event.getEventId(),
                             orderId,
@@ -121,7 +126,10 @@ public class OrderStore {
                 Order order = orders.get(orderId);
                 if (order != null) {
                     long physTime = event.getPhysicalTimestamp() != null ? event.getPhysicalTimestamp() : event.getTimestamp();
-                    order.arriveAtRestaurant(event.getRiderId(), physTime);
+                    String rider = event.getRiderId();
+                    if (rider != null && rider.equals(order.getAssignedRider())) {
+                        order.arriveAtRestaurant(rider, physTime);
+                    }
                     DistributedEvent de = new DistributedEvent(
                             event.getEventId(),
                             orderId,
@@ -135,7 +143,10 @@ public class OrderStore {
             case DELIVERED -> {
                 Order order = orders.get(orderId);
                 if (order != null) {
-                    order.deliverOrder(event.getRiderId());
+                    String rider = event.getRiderId();
+                    if (rider != null && rider.equals(order.getAssignedRider())) {
+                        order.deliverOrder(rider);
+                    }
                     DistributedEvent de = new DistributedEvent(
                             event.getEventId(),
                             orderId,

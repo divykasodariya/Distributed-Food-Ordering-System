@@ -70,35 +70,40 @@ public class GatewayServer extends UnicastRemoteObject implements GatewayRemote 
                 return getPrimaryStub();
             }
 
-            int totalWeight = 0;
-            NodeInfo selectedNode = null;
-            int maxCurrentWeight = Integer.MIN_VALUE;
+            while (!availableNodes.isEmpty()) {
+                int totalWeight = 0;
+                NodeInfo selectedNode = null;
+                int maxCurrentWeight = Integer.MIN_VALUE;
 
-            for (NodeInfo info : availableNodes) {
-                int baseWeight = (info.getRole() == NodeRole.PRIMARY) ? 1 : 3;
-                int currentWeight = currentWeights.getOrDefault(info.getNodeId(), 0) + baseWeight;
-                currentWeights.put(info.getNodeId(), currentWeight);
-                totalWeight += baseWeight;
+                for (NodeInfo info : availableNodes) {
+                    int baseWeight = (info.getRole() == NodeRole.PRIMARY) ? 1 : 3;
+                    int currentWeight = currentWeights.getOrDefault(info.getNodeId(), 0) + baseWeight;
+                    currentWeights.put(info.getNodeId(), currentWeight);
+                    totalWeight += baseWeight;
 
-                if (currentWeight > maxCurrentWeight) {
-                    maxCurrentWeight = currentWeight;
-                    selectedNode = info;
+                    if (currentWeight > maxCurrentWeight) {
+                        maxCurrentWeight = currentWeight;
+                        selectedNode = info;
+                    }
                 }
-            }
 
-            if (selectedNode != null) {
-                currentWeights.put(selectedNode.getNodeId(), maxCurrentWeight - totalWeight);
+                if (selectedNode != null) {
+                    currentWeights.put(selectedNode.getNodeId(), maxCurrentWeight - totalWeight);
 
-                try {
-                    OrderNodeRemote stub = (OrderNodeRemote) Naming.lookup(selectedNode.getRmiUrl());
-                    System.out.printf("[GATEWAY LOAD BALANCER] Routing read request getOrderStatus() -> Node %s (%s, WRR weight: %d)\n",
-                            selectedNode.getNodeId(), selectedNode.getRole(),
-                            (selectedNode.getRole() == NodeRole.PRIMARY) ? 1 : 3);
-                    return stub;
-                } catch (Exception e) {
-                    System.out.printf("[GATEWAY LOAD BALANCER] Node %s is UNREACHABLE during read lookup. Failing over to Primary...\n",
-                            selectedNode.getNodeId());
-                    selectedNode.setHealthStatus("UNREACHABLE");
+                    try {
+                        OrderNodeRemote stub = (OrderNodeRemote) Naming.lookup(selectedNode.getRmiUrl());
+                        System.out.printf("[GATEWAY LOAD BALANCER] Routing read request getOrderStatus() -> Node %s (%s, WRR weight: %d)\n",
+                                selectedNode.getNodeId(), selectedNode.getRole(),
+                                (selectedNode.getRole() == NodeRole.PRIMARY) ? 1 : 3);
+                        return stub;
+                    } catch (Exception e) {
+                        System.out.printf("[GATEWAY LOAD BALANCER] Node %s is UNREACHABLE during read lookup. Trying next node...\n",
+                                selectedNode.getNodeId());
+                        selectedNode.setHealthStatus("UNREACHABLE");
+                        availableNodes.remove(selectedNode);
+                    }
+                } else {
+                    break;
                 }
             }
 

@@ -29,6 +29,8 @@ public class EventLog {
     private final Set<String> loggedEventIds = new HashSet<>();
     private long latestVersion = 0;
 
+    private final List<ReplicationEvent> inMemoryEvents = new ArrayList<>();
+
     public EventLog(String nodeId, String baseDir) {
         this.nodeId = nodeId;
         File dir = new File(baseDir != null ? baseDir : ("data/node" + nodeId));
@@ -60,6 +62,11 @@ public class EventLog {
             return; // Idempotent: already written
         }
 
+        File parent = logFile.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
         try (FileOutputStream fos = new FileOutputStream(logFile, true);
              OutputStreamWriter osw = new OutputStreamWriter(fos, StandardCharsets.UTF_8);
              BufferedWriter bw = new BufferedWriter(osw);
@@ -71,6 +78,7 @@ public class EventLog {
         }
 
         loggedEventIds.add(event.getEventId());
+        inMemoryEvents.add(event);
         if (event.getVersion() > latestVersion) {
             latestVersion = event.getVersion();
         }
@@ -101,16 +109,19 @@ public class EventLog {
         } catch (IOException e) {
             System.err.printf("[EVENT LOG ERROR] Failed reading %s: %s\n", logFile.getPath(), e.getMessage());
         }
+
+        inMemoryEvents.clear();
+        inMemoryEvents.addAll(events);
         return events;
     }
 
     /**
      * Retrieves all events recorded after a specific version for catch-up synchronization.
+     * Uses in-memory cache for high-performance and resilient replication sync.
      */
     public synchronized List<ReplicationEvent> getEventsAfter(long afterVersion) {
-        List<ReplicationEvent> all = replayAll();
         List<ReplicationEvent> missing = new ArrayList<>();
-        for (ReplicationEvent ev : all) {
+        for (ReplicationEvent ev : inMemoryEvents) {
             if (ev.getVersion() > afterVersion) {
                 missing.add(ev);
             }
