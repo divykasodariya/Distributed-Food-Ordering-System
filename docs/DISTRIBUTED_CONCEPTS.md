@@ -64,3 +64,18 @@ To prevent the Primary node from becoming a CPU/IO bottleneck:
   - **BACKUP Nodes Weight**: Assigned higher weights (`3`) to maximize utilization of otherwise idle backup nodes.
 - **Dynamic Topology Adaptation**: When a leader election occurs or a node fails, the Gateway automatically clears and recalculates the WRR state without interrupting client requests.
 
+---
+
+## 10. Bounded Asynchronous Replication
+To prevent a single slow or unresponsive backup node from blocking synchronous client writes:
+- The Primary broadcasts `ReplicationEvent` messages concurrently to backups using cached thread pool workers (`ExecutorService`).
+- Each broadcast future is bounded by a safe timeout (`1000ms`).
+- Responsive backups acknowledge immediately; failing backups log warnings and catch up automatically upon restart.
+
+---
+
+## 11. Deterministic Replay & Catch-Up Invariant
+State machine replication guarantees replica convergence:
+- Monotonic version numbering ($v_1 < v_2 < \dots < v_n$) ensures identical event application order across replicas.
+- Direct status transitions (`setAssignedRiderDirectly`) allow replaying historical logs into clean memory stores without requiring transient network state or cached intermediate bids.
+- Rejoining nodes fetch missing event ranges from the active Primary's indexed event cache without touching cold disk files unless necessary.
