@@ -35,6 +35,16 @@ services:
     volumes:
       - ./data/node3:/app/data/node3
 
+  http-bridge:
+    build: .
+    container_name: http-bridge-server
+    command: java -cp bin com.foodordering.http.HttpBridgeServer 8080
+    network_mode: host
+    depends_on:
+      - gateway
+    ports:
+      - "8080:8080"
+
   customer:
     build: .
     container_name: customer-client
