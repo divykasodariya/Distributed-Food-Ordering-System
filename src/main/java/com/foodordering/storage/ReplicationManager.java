@@ -30,8 +30,11 @@ public class ReplicationManager {
      * @param peers list of cluster peers.
      * @return list of collected acknowledgments.
      */
+    private final java.util.concurrent.ExecutorService replicationExecutor = java.util.concurrent.Executors.newCachedThreadPool();
+
     public List<ReplicationAck> replicateToBackups(ReplicationEvent event, List<NodeInfo> peers) {
-        List<ReplicationAck> acks = new ArrayList<>();
+        List<ReplicationAck> acks = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
 
         for (NodeInfo peer : peers) {
             // Replicate only to BACKUP nodes
@@ -41,25 +44,35 @@ public class ReplicationManager {
                         localNodeId, targetNodeId, event.getOrderId(), event.getEventType(),
                         event.getVersion(), event.getEventId());
 
-                try {
-                    OrderNodeRemote stub = (OrderNodeRemote) Naming.lookup(peer.getRmiUrl());
-                    ReplicationAck ack = stub.replicateEvent(event);
-                    if (ack != null && ack.isSuccess()) {
-                        System.out.printf("[N%s -> N%s] ACK (applied successfully at version %d)\n",
-                                targetNodeId, localNodeId, ack.getCurrentVersion());
-                        acks.add(ack);
-                    } else {
-                        System.out.printf("[N%s -> N%s] NACK: %s\n",
-                                targetNodeId, localNodeId, ack != null ? ack.getStatusMessage() : "null response");
+                futures.add(replicationExecutor.submit(() -> {
+                    try {
+                        OrderNodeRemote stub = (OrderNodeRemote) Naming.lookup(peer.getRmiUrl());
+                        ReplicationAck ack = stub.replicateEvent(event);
+                        if (ack != null && ack.isSuccess()) {
+                            System.out.printf("[N%s -> N%s] ACK (applied successfully at version %d)\n",
+                                    targetNodeId, localNodeId, ack.getCurrentVersion());
+                            acks.add(ack);
+                        } else {
+                            System.out.printf("[N%s -> N%s] NACK: %s\n",
+                                    targetNodeId, localNodeId, ack != null ? ack.getStatusMessage() : "null response");
+                        }
+                    } catch (Exception e) {
+                        System.out.printf("[REPLICATION WARNING] N%s unavailable for replication: %s. " +
+                                "(N%s will synchronize missing events upon restart)\n",
+                                targetNodeId, e.getMessage(), targetNodeId);
                     }
-                } catch (Exception e) {
-                    System.out.printf("[REPLICATION WARNING] N%s unavailable for replication: %s. " +
-                            "(N%s will synchronize missing events upon restart)\n",
-                            targetNodeId, e.getMessage(), targetNodeId);
-                }
+                }));
             }
         }
-        return acks;
+
+        // Wait for replication with bounded timeout to prevent blocking on crashed nodes
+        for (java.util.concurrent.Future<?> f : futures) {
+            try {
+                f.get(1000, java.util.concurrent.TimeUnit.MILLISECONDS);
+            } catch (Exception ignored) {}
+        }
+
+        return new ArrayList<>(acks);
     }
 
     /**
