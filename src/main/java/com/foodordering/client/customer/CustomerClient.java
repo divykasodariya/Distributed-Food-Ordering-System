@@ -56,7 +56,8 @@ public class CustomerClient {
                 System.out.println("4. Check Order Status & Event Log");
                 System.out.println("5. Check Order Node Topology / Statuses");
                 System.out.println("6. Local Event Tick (Advance Lamport Clock)");
-                System.out.println("7. Exit");
+                System.out.println("7. Run Batch Read Load Balancing Benchmark (WRR Validation)");
+                System.out.println("8. Exit");
                 System.out.print("Enter choice: ");
 
                 if (!scanner.hasNextInt())
@@ -114,6 +115,29 @@ public class CustomerClient {
                         System.out.printf("Local event executed. Clock advanced to: %d\n", newTick);
                     }
                     case 7 -> {
+                        System.out.print("Enter Order ID to query repeatedly (e.g. 1001): ");
+                        int orderId = scanner.nextInt();
+                        System.out.print("Enter number of read queries (e.g. 14): ");
+                        int count = scanner.nextInt();
+                        scanner.nextLine();
+
+                        System.out.printf("\n--- Executing %d Read Queries (Smooth WRR: Primary=1, Backups=3) ---\n", count);
+                        long start = System.currentTimeMillis();
+                        int success = 0;
+                        for (int i = 1; i <= count; i++) {
+                            try {
+                                OrderSnapshot snap = gateway.getOrderStatus(orderId);
+                                if (snap != null) success++;
+                            } catch (Exception e) {
+                                System.out.printf("Query #%d failed: %s\n", i, e.getMessage());
+                            }
+                        }
+                        long duration = System.currentTimeMillis() - start;
+                        System.out.printf("Completed %d queries (%d successful) in %d ms (Avg latency: %.2f ms/query)\n",
+                                count, success, duration, (double) duration / count);
+                        System.out.println("Inspect Gateway logs to observe Smooth WRR interleaved routing.");
+                    }
+                    case 8 -> {
                         System.out.println("Exiting Customer App. Goodbye!");
                         return;
                     }
